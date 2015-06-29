@@ -6,6 +6,7 @@ path = require("path")
 WebSocket = require('ws')
 parseArgs = require("minimist")
 Encryptor = require("./encrypt").Encryptor
+daemon = require('daemon');
 
 options =
   alias:
@@ -67,6 +68,13 @@ setInterval(->
   if global.gc
     gc()
 , 1000)
+
+runInDaemon = ->
+  infoLog = fs.openSync('info.log', 'w')
+  errorLog = fs.openSync('error.log', 'w')
+  daemon({stdout: infoLog, stderr: errorLog})
+
+runInDaemon()
 
 server = net.createServer (connection) ->
   console.log "local connected"
