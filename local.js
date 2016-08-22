@@ -117,7 +117,7 @@
   };
 
   server = net.createServer(function(connection) {
-    var aServer, proxy, addrLen, addrToSend, cachedPieces, encryptor, headerLength, ping, remoteAddr, remotePort, stage, ws;
+    var aServer, addrLen, addrToSend, cachedPieces, encryptor, headerLength, ping, remoteAddr, remotePort, stage, ws;
     console.log("local connected");
     server.getConnections(function(err, count) {
       console.log("concurrent connections:", count);
