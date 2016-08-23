@@ -5,6 +5,7 @@ fs = require("fs")
 path = require("path")
 WebSocket = require('ws')
 parseArgs = require("minimist")
+HttpsProxyAgent = require('https-proxy-agent')
 Encryptor = require("./encrypt").Encryptor
 
 options =
@@ -41,6 +42,12 @@ timeout = Math.floor(config.timeout * 1000)
 
 if METHOD.toLowerCase() in ["", "null", "table"]
   METHOD = null
+  
+HTTPPROXY = process.env.http_proxy   
+
+if HTTPPROXY
+  console.log "http proxy:", HTTPPROXY
+
 
 prepareServer = (address) ->
   serverUrl = url.parse address
@@ -133,7 +140,32 @@ server = net.createServer (connection) ->
         buf.writeInt16BE remotePort, 8
         connection.write buf
         # connect to remote server
-        ws = new WebSocket aServer, protocol: "binary"
+        # ws = new WebSocket aServer, protocol: "binary"
+
+        if HTTPPROXY
+          # WebSocket endpoint for the proxy to connect to 
+          endpoint = aServer
+          parsed = url.parse(endpoint)
+          #console.log('attempting to connect to WebSocket %j', endpoint);
+               
+          # create an instance of the `HttpsProxyAgent` class with the proxy server information 
+          opts = url.parse(HTTPPROXY)
+               
+          # IMPORTANT! Set the `secureEndpoint` option to `false` when connecting 
+          #            over "ws://", but `true` when connecting over "wss://" 
+          opts.secureEndpoint = parsed.protocol ? parsed.protocol == 'wss:' : false
+               
+          agent = new HttpsProxyAgent(opts)
+
+          ws = new WebSocket(aServer, {
+                protocol: "binary",
+                agent: agent
+              });
+        else
+          ws = new WebSocket(aServer, {
+                protocol: "binary"
+              });
+        
         ws.on "open", ->
           ws._socket.on "error", (e) ->
             console.log "remote #{remoteAddr}:#{remotePort} #{e}"
