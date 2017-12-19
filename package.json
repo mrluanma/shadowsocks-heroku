@@ -2,11 +2,18 @@
   "name": "shadowsocks-heroku",
   "version": "0.9.10",
   "dependencies": {
-    "minimist": "^1.2.0",
+    "duplexify": "^3.5.0",
+    "generic-pool": "^3.1.6",
     "https-proxy-agent": "^1.0.0",
-    "ws": "^1.0.1"
+    "minimist": "^1.2.0",
+    "multiplex": "^6.7.0",
+    "through2": "^2.0.3",
+    "uuid": "^3.0.0",
+    "websocket-stream": "^3.3.3",
+    "ws": "^1.1.0"
   },
   "scripts": {
-    "start": "node server.js -b 0.0.0.0"
+    "start": "node server.js -b 0.0.0.0",
+    "compile": "coffee -cw -o ./  src"
   }
 }

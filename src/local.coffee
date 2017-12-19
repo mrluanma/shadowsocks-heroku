@@ -8,6 +8,10 @@ parseArgs = require("minimist")
 HttpsProxyAgent = require('https-proxy-agent')
 Encryptor = require("./encrypt").Encryptor
 
+carrier = require('./carrier')
+multiplex = require('multiplex')
+uuid = require('uuid')
+
 options =
   alias:
     'b': 'local_address'
@@ -42,12 +46,6 @@ timeout = Math.floor(config.timeout * 1000)
 
 if METHOD.toLowerCase() in ["", "null", "table"]
   METHOD = null
-  
-HTTPPROXY = process.env.http_proxy   
-
-if HTTPPROXY
-  console.log "http proxy:", HTTPPROXY
-
 
 prepareServer = (address) ->
   serverUrl = url.parse address
@@ -70,29 +68,39 @@ getServer = ->
   else
     SERVER
 
+carrierPool = carrier.carrierPool({
+  ws_url: SERVER,
+  getServer: getServer
+})
+
 server = net.createServer (connection) ->
-  console.log "local connected"
-  server.getConnections (err, count) ->
-    console.log "concurrent connections:", count
-    return
+  # console.log "local connected"
+  # server.getConnections (err, count) ->
+  #   console.log "concurrent connections:", count
+  #   return
   encryptor = new Encryptor(KEY, METHOD)
   stage = 0
   headerLength = 0
   cachedPieces = []
   addrLen = 0
-  ws = null
-  ping = null
   remoteAddr = null
   remotePort = null
   addrToSend = ""
-  aServer = getServer()
+
+  subStream = null
+  resourcePromise = null
+
   connection.on "data", (data) ->
+
     if stage is 5
       # pipe sockets
-      data = encryptor.encrypt data
-      if ws.readyState is WebSocket.OPEN
-        ws.send data, { binary: true }
-        connection.pause() if ws.bufferedAmount > 0
+      encData = encryptor.encrypt(data)
+
+      if subStream.ended
+        console.log(data.toString(), 'already ended')
+      else
+        subStream.write(encData)
+
       return
     if stage is 0
       tempBuf = new Buffer(2)
@@ -101,7 +109,7 @@ server = net.createServer (connection) ->
       stage = 1
       return
     if stage is 1
-      try
+     try
         # +----+-----+-------+------+----------+----------+
         # |VER | CMD |  RSV  | ATYP | DST.ADDR | DST.PORT |
         # +----+-----+-------+------+----------+----------+
@@ -139,79 +147,48 @@ server = net.createServer (connection) ->
         buf.write "\u0000\u0000\u0000\u0000", 4, 4, "binary"
         buf.writeInt16BE remotePort, 8
         connection.write buf
-        # connect to remote server
-        # ws = new WebSocket aServer, protocol: "binary"
 
-        if HTTPPROXY
-          # WebSocket endpoint for the proxy to connect to 
-          endpoint = aServer
-          parsed = url.parse(endpoint)
-          #console.log('attempting to connect to WebSocket %j', endpoint);
-               
-          # create an instance of the `HttpsProxyAgent` class with the proxy server information 
-          opts = url.parse(HTTPPROXY)
-               
-          # IMPORTANT! Set the `secureEndpoint` option to `false` when connecting 
-          #            over "ws://", but `true` when connecting over "wss://" 
-          opts.secureEndpoint = parsed.protocol ? parsed.protocol == 'wss:' : false
-               
-          agent = new HttpsProxyAgent(opts)
+        resourcePromise = carrierPool.acquire()
+        resourcePromise.then((resource) -> (
+          uid = uuid.v1()
+          subStream = resource.plex.createStream(uid)
+          subStream.uid = uid
 
-          ws = new WebSocket(aServer, {
-                protocol: "binary",
-                agent: agent
-              });
-        else
-          ws = new WebSocket(aServer, {
-                protocol: "binary"
-              });
-        
-        ws.on "open", ->
-          ws._socket.on "error", (e) ->
-            console.log "remote #{remoteAddr}:#{remotePort} #{e}"
-            connection.destroy()
-            server.getConnections (err, count) ->
-              console.log "concurrent connections:", count
-              return
-
-          console.log "connecting #{remoteAddr} via #{aServer}"
           addrToSendBuf = new Buffer(addrToSend, "binary")
-          addrToSendBuf = encryptor.encrypt addrToSendBuf
-          ws.send addrToSendBuf, { binary: true }
-          i = 0
+          encData = encryptor.encrypt(addrToSendBuf)
+          subStream.write(encData)
+          
+          process.nextTick(->
+            if resource.ws._writableState.writing is false
+              carrierPool.release(resource)
+            else
+              resource.ws.once('send-complete', ->
+                carrierPool.release(resource)
+              )
+          )
+          
+          subStream.on('data', (dataRaw) ->
+            data = encryptor.decrypt(dataRaw)
+            connection.write(data)
+          )
+          subStream.on('error', (e)->
+            console.log "remote #{remoteAddr}:#{remotePort} error: #{e}"
+            connection.end()
+          )
 
+          i = 0
           while i < cachedPieces.length
             piece = cachedPieces[i]
             piece = encryptor.encrypt piece
-            ws.send piece, { binary: true }
+            subStream.write(piece)
             i++
           cachedPieces = null # save memory
           stage = 5
+        ))
 
-          ping = setInterval(->
-            ws.ping "", null, true
-          , 50 * 1000)
-
-          ws._socket.on "drain", ->
-            connection.resume()
-
-          return
-
-        ws.on "message", (data, flags) ->
-          data = encryptor.decrypt data
-          ws._socket.pause() unless connection.write(data)
-
-        ws.on "close", ->
-          clearInterval ping
-          console.log "remote disconnected"
-          connection.destroy()
-
-        ws.on "error", (e) ->
-          console.log "remote #{remoteAddr}:#{remotePort} error: #{e}"
-          connection.destroy()
-          server.getConnections (err, count) ->
-            console.log "concurrent connections:", count
-            return
+        .catch((e)->
+          console.log(e, 'resource failed')
+        )
 
         if data.length > headerLength
           buf = new Buffer(data.length - headerLength)
@@ -222,33 +199,29 @@ server = net.createServer (connection) ->
       catch e
         # may encounter index out of range
         console.log e
-        connection.destroy()
+        connection.end()
     else cachedPieces.push data if stage is 4
       # remote server not connected
       # cache received buffers
       # make sure no data is lost
 
-  connection.on "end", ->
-    console.log "local disconnected"
-    ws.terminate() if ws
-    server.getConnections (err, count) ->
-      console.log "concurrent connections:", count
-      return
+  connection.on('finish', ->
+    console.log("local disconnected", subStream && subStream.uid)
+    if subStream? then subStream.end()
+  )
 
   connection.on "error", (e)->
     console.log "local error: #{e}"
-    ws.terminate() if ws
-    server.getConnections (err, count) ->
-      console.log "concurrent connections:", count
-      return
+    subStream.end() if subStream
+    # server.getConnections (err, count) ->
+    #   console.log "concurrent connections:", count
+    #   return
 
-  connection.on "drain", ->
-    ws._socket.resume() if ws and ws._socket
 
   connection.setTimeout timeout, ->
     console.log "local timeout"
-    connection.destroy()
-    ws.terminate() if ws
+    connection.end()
+    subStream.end() if subStream
 
 server.listen PORT, LOCAL_ADDRESS, ->
   address = server.address()

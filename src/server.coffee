@@ -7,6 +7,9 @@ WebSocketServer = WebSocket.Server
 parseArgs = require("minimist")
 Encryptor = require("./encrypt").Encryptor
 
+multiplex = require('multiplex')
+websocketStream = require('websocket-stream')
+
 options =
   alias:
     'b': 'local_address'
@@ -46,110 +49,103 @@ server = http.createServer (req, res) ->
   res.writeHead 200, 'Content-Type': 'text/plain'
   res.end("asdf.")
 
-wss = new WebSocketServer server: server
+  
+handleWebsocketStream = (wsStream) -> 
+   
+    plex = multiplex((stream, id) -> (
+      encryptor = new Encryptor(KEY, METHOD)
+      stage = 0
+      headerLength = 0
+      remote = null
+      cachedPieces = []
+      addrLen = 0
+      remoteAddr = null
+      remotePort = null
 
-wss.on "connection", (ws) ->
-  console.log "server connected"
-  console.log "concurrent connections:", wss.clients.length
-  encryptor = new Encryptor(KEY, METHOD)
-  stage = 0
-  headerLength = 0
-  remote = null
-  cachedPieces = []
-  addrLen = 0
-  remoteAddr = null
-  remotePort = null
-  ws.on "message", (data, flags) ->
-    data = encryptor.decrypt data
-    if stage is 5
-      ws._socket.pause() unless remote.write(data)
-      return
-    if stage is 0
-      try
-        addrtype = data[0]
-        if addrtype is 3
-          addrLen = data[1]
-        else unless addrtype is 1
-          console.warn "unsupported addrtype: " + addrtype
-          ws.close()
-          return
-        # read address and port
-        if addrtype is 1
-          remoteAddr = inetNtoa(data.slice(1, 5))
-          remotePort = data.readUInt16BE(5)
-          headerLength = 7
-        else
-          remoteAddr = data.slice(2, 2 + addrLen).toString("binary")
-          remotePort = data.readUInt16BE(2 + addrLen)
-          headerLength = 2 + addrLen + 2
-
-        # connect remote server
-        remote = net.connect(remotePort, remoteAddr, ->
-          console.log "connecting", remoteAddr
-          i = 0
-
-          while i < cachedPieces.length
-            piece = cachedPieces[i]
-            remote.write piece
-            i++
-          cachedPieces = null # save memory
-          stage = 5
-        )
-        remote.on "data", (data) ->
-          data = encryptor.encrypt data
-          if ws.readyState is WebSocket.OPEN
-            ws.send data, { binary: true }
-            remote.pause() if ws.bufferedAmount > 0
-          return
-
-        remote.on "end", ->
-          ws.close()
-          console.log "remote disconnected"
-
-        remote.on "drain", ->
-          ws._socket.resume()
-
-        remote.on "error", (e)->
-          ws.terminate()
-          console.log "remote: #{e}"
-
-        remote.setTimeout timeout, ->
-          console.log "remote timeout"
-          remote.destroy()
-          ws.close()
-
-        if data.length > headerLength
-          # make sure no data is lost
-          buf = new Buffer(data.length - headerLength)
-          data.copy buf, 0, headerLength
-          cachedPieces.push buf
-          buf = null
-        stage = 4
-      catch e
-        # may encouter index out of range
-        console.warn e
+      stream.on('end', ->
         remote.destroy() if remote
-        ws.close()
-    else cachedPieces.push data if stage is 4
-      # remote server not connected
-      # cache received buffers
-      # make sure no data is lost
+      )
 
-  ws.on "ping", ->
-    ws.pong '', null, true
+      stream.on('data', (dataRaw) ->
+        data = encryptor.decrypt(dataRaw)
+        if stage is 5
+          if remote.destroyed is false
+            remote.write(data)
+          else 
+            console.log('already desc', id)
+          return
+        if stage is 0
+          try
+            addrtype = data[0]
+            if addrtype is 3
+              addrLen = data[1]
+            else unless addrtype is 1
+              console.warn "unsupported addrtype: " + addrtype
+              stream.end()
+              return
+            # read address and port
+            if addrtype is 1
+              remoteAddr = inetNtoa(data.slice(1, 5))
+              remotePort = data.readUInt16BE(5)
+              headerLength = 7
+            else
+              remoteAddr = data.slice(2, 2 + addrLen).toString("binary")
+              remotePort = data.readUInt16BE(2 + addrLen)
+              headerLength = 2 + addrLen + 2
 
-  ws._socket.on "drain", ->
-    remote.resume() if stage is 5
+            # connect remote server
+            remote = net.connect(remotePort, remoteAddr, ->
+              console.log "connecting", remoteAddr
+              i = 0
 
-  ws.on "close", ->
-    console.log "server disconnected"
-    console.log "concurrent connections:", wss.clients.length
-    remote.destroy() if remote
+              while i < cachedPieces.length
+                piece = cachedPieces[i]
+                remote.write piece
+                i++
+              cachedPieces = null # save memory
+              stage = 5
+            )
+            remote.on "data", (dataRemote) ->
+              data = encryptor.encrypt(dataRemote)
+              stream.write(data)
 
-  ws.on "error", (e) ->
-    console.warn "server: #{e}"
-    console.log "concurrent connections:", wss.clients.length
-    remote.destroy() if remote
+            remote.on "end", ->
+              stream.end()
+              console.log "remote disconnected"
+            remote.on "error", (e)->
+              stream.end()
+              console.log "remote: #{e}"
+
+            remote.setTimeout timeout, ->
+              console.log "remote timeout"
+              remote.destroy()
+              stream.end()
+
+            if data.length > headerLength
+              # make sure no data is lost
+              buf = new Buffer(data.length - headerLength)
+              data.copy buf, 0, headerLength
+              cachedPieces.push buf
+              buf = null
+            stage = 4
+          catch e
+            # may encouter index out of range
+            console.warn e
+            remote.destroy() if remote
+            stream.end()
+        else cachedPieces.push data if stage is 4
+          # remote server not connected
+          # cache received buffers
+          # make sure no data is lost
+      )
+    ))
+
+    wsStream.pipe(plex)
+    plex.pipe(wsStream)
+
+
+wss = websocketStream.createServer({server: server}, handleWebsocketStream)
+
 
 server.listen PORT, LOCAL_ADDRESS, ->
   address = server.address()
