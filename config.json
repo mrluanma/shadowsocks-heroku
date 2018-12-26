@@ -4,7 +4,7 @@
   "scheme": "ws",
   "local_port": 1080,
   "remote_port": 80,
-  "password": "`try*(^^$some^$%^complex>:<>?~password/",
+  "password": "<your_password>",
   "timeout": 300,
   "method": "aes-256-cfb"
 }
