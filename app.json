@@ -1,0 +1,14 @@
+{
+  "name": "shadowsocks-heroku",
+  "description": "https://github.com/0polar/shadowsocks-heroku",
+  "env": {
+    "METHOD": {
+      "description": "cipher",
+      "value": "aes-256-cfb"
+    },
+    "KEY": {
+      "description": "password",
+      "value": ""
+    }
+  }
+}
