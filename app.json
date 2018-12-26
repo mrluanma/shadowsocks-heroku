@@ -1,9 +1,6 @@
 {
   "name": "shadowsocks-heroku",
   "description": "https://github.com/0polar/shadowsocks-heroku",
-  "engines": {
-    "node": "8.x"
-  },
   "env": {
     "METHOD": {
       "description": "cipher",
