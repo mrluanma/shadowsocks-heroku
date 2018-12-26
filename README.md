@@ -12,33 +12,7 @@ Heroku
 
 ### Usage
 
-```
-$ heroku create
-Creating still-tor-8707... done, stack is cedar-14
-http://still-tor-8707.herokuapp.com/ | git@heroku.com:still-tor-8707.git
-```
-
-Push the code to Heroku.
-
-```
-$ git push heroku master
-…
------> Compressing... done, 5.1MB
------> Launching... done, v3
-       http://still-tor-8707.herokuapp.com/ deployed to Heroku
-
-To git@heroku.com:still-tor-8707.git
- * [new branch]      master -> master
-```
-
-Set a few configs:
-
-```
-$ heroku config:set METHOD=rc4 KEY=foobar
-Setting config vars and restarting still-tor-8707... done, v11
-KEY:    foobar
-METHOD: rc4
-```
+[![Deploy to Heroku](https://www.herokucdn.com/deploy/button.png)](https://heroku.com/deploy?template=https://github.com/0polar/shadowsocks-heroku/tree/master)
 
 Install project dependencies with `npm install`:
 
@@ -64,9 +38,7 @@ SOCKS5 127.0.0.1:1080
 
 If there is something wrong, you can check the logs by:
 
-```
-$ heroku logs -t --app still-tor-8707
-```
+https://dashboard.heroku.com/apps/<your_app_name>/logs
 
 Supported Ciphers
 -----------------
