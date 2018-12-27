@@ -10,9 +10,9 @@ Notice: this protocol is **INCOMPATIBLE** with the origin shadowsocks.
 
 ## How to use
 
-1. [![Deploy to Heroku](https://www.herokucdn.com/deploy/button.png)](https://heroku.com/deploy?template=https://github.com/0polar/shadowsocks-heroku/tree/master)
+1. [![Deploy to Heroku](https://www.herokucdn.com/deploy/button.png)](https://heroku.com/deploy?template=https://github.com/mrluanma/shadowsocks-heroku/tree/master)
 
-2. [Download](https://github.com/0polar/shadowsocks-heroku/archive/master.zip) and unzip this repository, and go to the folder
+2. [Download](https://github.com/mrluanma/shadowsocks-heroku/archive/master.zip) and unzip this repository, and go to the folder
 
 3. Install project dependencies with command `npm install`
 
