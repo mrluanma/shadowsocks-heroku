@@ -25,8 +25,7 @@ Notice: this protocol is **INCOMPATIBLE** with the origin shadowsocks.
 
 ## Troubleshooting
 
-If there is something wrong, you can check the logs by:
-
+If there is something wrong, you can check the logs by:  
 [https://dashboard.heroku.com/apps/<your_app_name>/logs](https://dashboard.heroku.com/apps/<your_app_name>/logs)
 
 
