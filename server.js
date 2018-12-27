@@ -54,18 +54,22 @@ if (['', 'null', 'table'].includes(METHOD.toLowerCase())) {
 }
 
 const server = http.createServer(function(clientRequest, clientResponse) {
-  var options = {
+  const options = {
     hostname: 'www.ruanyifeng.com',
     port: 80,
     path: clientRequest.url,
     method: clientRequest.method,
     headers: Object.assign(clientRequest.headers, { host: 'www.ruanyifeng.com' })
+  };
+  try {
+    var initiation = http.request(options, function(response) {
+      clientResponse.writeHead(response.statusCode, response.headers);
+      response.pipe(clientResponse);
+    });
+    clientRequest.pipe(initiation);
+  } catch (error) {
+    clientRequest.abort();
   }
-  var initiation = http.request(options, function (response) {
-    clientResponse.writeHead(response.statusCode, response.headers)
-    response.pipe(clientResponse)
-  })
-  clientRequest.pipe(initiation)
 });
 
 const wss = new WebSocketServer({ server });
