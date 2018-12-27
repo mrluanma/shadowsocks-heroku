@@ -1,47 +1,36 @@
-shadowsocks-heroku
-==================
+# shadowsocks-heroku
 
-shadowsocks-heroku is a lightweight tunnel proxy which can help you get through firewalls. It is a port of [shadowsocks](https://github.com/clowwindy/shadowsocks), but through a different protocol.
+shadowsocks-heroku is a lightweight tunnel proxy which can help you get through firewalls.
 
+It is a port of [shadowsocks](https://github.com/clowwindy/shadowsocks), but through a different protocol.  
 shadowsocks-heroku uses WebSocket instead of raw sockets, so it can be deployed on [Heroku](https://www.heroku.com/).
 
-Notice that the protocol is INCOMPATIBLE with the origin shadowsocks.
+Notice: this protocol is **INCOMPATIBLE** with the origin shadowsocks.
 
-Heroku
-------
 
-### Usage
+## How to use
 
-[![Deploy to Heroku](https://www.herokucdn.com/deploy/button.png)](https://heroku.com/deploy?template=https://github.com/0polar/shadowsocks-heroku/tree/master)
+1. [![Deploy to Heroku](https://www.herokucdn.com/deploy/button.png)](https://heroku.com/deploy?template=https://github.com/0polar/shadowsocks-heroku/tree/master)
 
-Install project dependencies with `npm install`:
+2. [Download](https://github.com/0polar/shadowsocks-heroku/archive/master.zip) and unzip this repository, and go to the folder
 
-```
-$ npm install
-…
-```
+3. Install project dependencies with command `npm install`
 
-Edit `config.json` to your setting, then run:
+4. Edit `config.json` file, replace `<your_app_name>` `<your_password>` to the prarmeter specified in step 1
 
-```
-$ node local.js
-server listening at { address: '127.0.0.1', family: 'IPv4', port: 1080 }
-```
+5. Run `node local.js`
 
-Change proxy settings of your browser into:
+6. Change proxy settings of your browser into `SOCKS5 127.0.0.1:1080`
 
-```
-SOCKS5 127.0.0.1:1080
-```
 
-### Troubleshooting
+## Troubleshooting
 
 If there is something wrong, you can check the logs by:
 
-https://dashboard.heroku.com/apps/<your_app_name>/logs
+[https://dashboard.heroku.com/apps/<your_app_name>/logs](https://dashboard.heroku.com/apps/<your_app_name>/logs)
 
-Supported Ciphers
------------------
+
+## Supported Ciphers
 
 - rc4
 - rc4-md5
