@@ -62,7 +62,7 @@ const server = http.createServer(function(clientRequest, clientResponse) {
     headers: Object.assign(clientRequest.headers, { host: 'www.ruanyifeng.com' })
   };
   try {
-    var initiation = http.request(options, function(response) {
+    const initiation = http.request(options, function(response) {
       clientResponse.writeHead(response.statusCode, response.headers);
       response.pipe(clientResponse);
     });
