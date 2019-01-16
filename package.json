@@ -1,7 +1,7 @@
 {
   "name": "shadowsocks-heroku",
   "engines": {
-    "node": "8.x"
+    "node": "10.x"
   },
   "dependencies": {
     "bufferutil": "^3.0.3",
