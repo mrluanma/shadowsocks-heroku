@@ -251,9 +251,8 @@ var server = net.createServer(function (connection) {
 
   connection.on('end', function () {
     console.log('local disconnected');
-    if (ws) {
-      ws.terminate();
-    }
+    ws?.terminate();
+
     server.getConnections(function (err, count) {
       console.log('concurrent connections:', count);
     });
@@ -261,9 +260,8 @@ var server = net.createServer(function (connection) {
 
   connection.on('error', function (e) {
     console.log(`local error: ${e}`);
-    if (ws) {
-      ws.terminate();
-    }
+    ws?.terminate();
+
     server.getConnections(function (err, count) {
       console.log('concurrent connections:', count);
     });
@@ -272,9 +270,7 @@ var server = net.createServer(function (connection) {
   connection.setTimeout(timeout, function () {
     console.log('local timeout');
     connection.destroy();
-    if (ws) {
-      ws.terminate();
-    }
+    ws?.terminate();
   });
 });
 

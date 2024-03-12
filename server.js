@@ -170,17 +170,13 @@ wss.on('connection', function (ws) {
   ws.on('close', function () {
     console.log('server disconnected');
     console.log('concurrent connections:', wss.clients.size);
-    if (remote) {
-      remote.destroy();
-    }
+    remote?.destroy();
   });
 
   ws.on('error', function (e) {
     console.warn(`server: ${e}`);
     console.log('concurrent connections:', wss.clients.size);
-    if (remote) {
-      remote.destroy();
-    }
+    remote?.destroy();
   });
 });
 
