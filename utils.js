@@ -22,3 +22,16 @@ export function memoize(func) {
     return result;
   };
 }
+
+export function createTransformStream(withFn, initial) {
+  return new TransformStream({
+    start(controller) {
+      if (initial) {
+        controller.enqueue(withFn(initial));
+      }
+    },
+    async transform(chunk, controller) {
+      controller.enqueue(withFn(chunk));
+    },
+  });
+}

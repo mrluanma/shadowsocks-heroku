@@ -1,11 +1,11 @@
 import net from 'net';
 import fs from 'fs';
 import http from 'http';
-import WebSocket from 'ws';
-import {WebSocketServer} from 'ws';
+import {WebSocketServer, createWebSocketStream} from 'ws';
 import parseArgs from 'minimist';
 import {Encryptor} from './encrypt.js';
-import {inetNtoa} from './utils.js';
+import {inetNtoa, createTransformStream} from './utils.js';
+import {Duplex} from 'node:stream';
 
 const options = {
   alias: {
@@ -41,143 +41,94 @@ for (let k in configFromArgs) {
   config[k] = v;
 }
 
-const timeout = Math.floor(config.timeout * 1000);
 const LOCAL_ADDRESS = config.local_address;
 const PORT = config.remote_port;
 const KEY = config.password;
 let METHOD = config.method;
-const highWaterMark = +process.env.HIGH_WATER_MARK || 64 * 1024;
 
-const server = http.createServer(function (req, res) {
+const server = http.createServer(function (_, res) {
   res.writeHead(200, {'Content-Type': 'text/plain'});
   res.end('asdf.');
 });
 
-const wss = new WebSocketServer({
+const wsserver = new WebSocketServer({
   server,
   autoPong: true,
   allowSynchronousEvents: true,
   perMessageDeflate: false,
 });
 
-wss.on('connection', function (ws) {
-  console.log('server connected');
-  console.log('concurrent connections:', wss.clients.size);
+wsserver.on('connection', async (ws) => {
+  console.log('concurrent connections:', wsserver.clients.size);
   const encryptor = new Encryptor(KEY, METHOD);
-  let stage = 0;
-  let remote = null;
-  let cachedPieces = [];
-  let remoteAddr = null;
-  let remotePort = null;
-  ws.on('message', function (data, flags) {
-    data = encryptor.decrypt(data);
-    if (stage === 5) {
-      remote.write(data);
+  let remoteAddr;
+  let remotePort;
+
+  const wss = Duplex.toWeb(createWebSocketStream(ws));
+  const readable = wss.readable.pipeThrough(
+    createTransformStream(encryptor.decrypt.bind(encryptor)),
+  );
+  const reader = readable.getReader();
+  const {value: data} = await reader.read();
+
+  let headerLength = 2;
+  if (data.length < headerLength) {
+    reader.cancel();
+    return;
+  }
+  const addrtype = data[0];
+  if (![1, 3, 4].includes(addrtype)) {
+    console.warn(`unsupported addrtype: ${addrtype}`);
+    reader.cancel();
+    return;
+  }
+  // read address and port
+  if (addrtype === 1) {
+    // ipv4
+    headerLength = 1 + 4 + 2;
+    if (data.length < headerLength) {
+      reader.cancel();
+      return;
     }
-    if (stage === 0) {
-      let headerLength = 2;
-      if (data.length < headerLength) {
-        ws.close();
-        return;
-      }
-      const addrtype = data[0];
-      if (![1, 3, 4].includes(addrtype)) {
-        console.warn(`unsupported addrtype: ${addrtype}`);
-        ws.close();
-        return;
-      }
-      // read address and port
-      if (addrtype === 1) {
-        // ipv4
-        headerLength = 1 + 4 + 2;
-        if (data.length < headerLength) {
-          ws.close();
-          return;
-        }
-        remoteAddr = inetNtoa(4, data.subarray(1, 5));
-        remotePort = data.readUInt16BE(5);
-      } else if (addrtype === 4) {
-        // ipv6
-        headerLength = 1 + 16 + 2;
-        if (data.length < headerLength) {
-          ws.close();
-          return;
-        }
-        remoteAddr = inetNtoa(6, data.subarray(1, 17));
-        remotePort = data.readUInt16BE(17);
-      } else {
-        let addrLen = data[1];
-        headerLength = 2 + addrLen + 2;
-        if (data.length < headerLength) {
-          ws.close();
-          return;
-        }
-        remoteAddr = data.subarray(2, 2 + addrLen).toString('binary');
-        remotePort = data.readUInt16BE(2 + addrLen);
-      }
-
-      // connect to remote server
-      remote = net.connect(remotePort, remoteAddr, function () {
-        console.log('connecting', remoteAddr);
-        remote.write(Buffer.concat(cachedPieces));
-        cachedPieces = null;
-        stage = 5;
-      });
-      remote.on('data', function (data) {
-        if (ws.readyState === WebSocket.OPEN) {
-          data = encryptor.encrypt(data);
-          ws.send(data, {binary: true}, (err) => {
-            if (err) return;
-            if (ws.bufferedAmount < highWaterMark && remote.isPaused())
-              remote.resume();
-          });
-          if (ws.bufferedAmount >= highWaterMark && !remote.isPaused())
-            remote.pause();
-        }
-      });
-
-      remote.on('end', function () {
-        ws.close();
-        console.log('remote disconnected');
-      });
-
-      remote.on('error', function (e) {
-        ws.terminate();
-        console.log(`remote: ${e}`);
-      });
-
-      remote.setTimeout(timeout, function () {
-        console.log('remote timeout');
-        remote.destroy();
-        ws.close();
-      });
-
-      if (data.length > headerLength) {
-        // make sure no data is lost
-        let buf = Buffer.alloc(data.length - headerLength);
-        data.copy(buf, 0, headerLength);
-        cachedPieces.push(buf);
-      }
-      stage = 4;
-    } else if (stage === 4) {
-      // remote server not connected
-      // cache received buffers
-      // make sure no data is lost
-      cachedPieces.push(data);
+    remoteAddr = inetNtoa(4, data.subarray(1, 5));
+    remotePort = data.readUInt16BE(5);
+  } else if (addrtype === 4) {
+    // ipv6
+    headerLength = 1 + 16 + 2;
+    if (data.length < headerLength) {
+      reader.cancel();
+      return;
     }
-  });
+    remoteAddr = inetNtoa(6, data.subarray(1, 17));
+    remotePort = data.readUInt16BE(17);
+  } else {
+    let addrLen = data[1];
+    headerLength = 2 + addrLen + 2;
+    if (data.length < headerLength) {
+      reader.cancel();
+      return;
+    }
+    remoteAddr = data.subarray(2, 2 + addrLen).toString('binary');
+    remotePort = data.readUInt16BE(2 + addrLen);
+  }
 
-  ws.on('close', function () {
-    console.log('server disconnected');
-    console.log('concurrent connections:', wss.clients.size);
-    remote?.destroy();
-  });
+  const remote = Duplex.toWeb(net.connect(remotePort, remoteAddr));
+  console.log('connecting', remoteAddr);
+  const writer = remote.writable.getWriter();
+  if (data.length > headerLength) {
+    await writer.write(data.subarray(headerLength));
+  }
 
-  ws.on('error', function (e) {
-    console.warn(`server: ${e}`);
-    console.log('concurrent connections:', wss.clients.size);
-    remote?.destroy();
-  });
+  reader.releaseLock();
+  writer.releaseLock();
+
+  readable
+    .pipeTo(remote.writable)
+    .catch((e) => e.name !== 'AbortError' && console.error(`server: ${e}`));
+  remote.readable
+    .pipeThrough(createTransformStream(encryptor.encrypt.bind(encryptor)))
+    .pipeTo(wss.writable)
+    .catch((e) => e.name !== 'AbortError' && console.error(`server: ${e}`));
 });
 
 server.listen(PORT, LOCAL_ADDRESS, function () {
