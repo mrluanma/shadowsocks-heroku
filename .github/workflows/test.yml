@@ -6,10 +6,7 @@ on:
 
 jobs:
   tests:
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v4
@@ -24,4 +21,4 @@ jobs:
       run: devenv ci
 
     - name: Run test
-      run: devenv shell bun run test.js
+      run: devenv shell node test.js

@@ -3,7 +3,7 @@
 {
   languages.javascript = {
     enable = true;
-    bun = {
+    yarn = {
       enable = true;
       install.enable = true;
     };
