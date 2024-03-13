@@ -48,7 +48,7 @@ $ npm install
 Then run:
 
 ```
-$ node local.js -s still-tor-8707.herokuapp.com -l 1080 -m aes-128-cfb -k foobar -r 80
+$ node local.js -s ws://still-tor-8707.herokuapp.com -l 1080 -m aes-128-cfb -k foobar -r 80
 server listening at { address: '127.0.0.1', family: 'IPv4', port: 1080 }
 ```
 

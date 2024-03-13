@@ -1,6 +1,4 @@
 import net from 'net';
-import url from 'url';
-import http from 'http';
 import fs from 'fs';
 import WebSocket from 'ws';
 import parseArgs from 'minimist';
@@ -18,14 +16,7 @@ const options = {
     c: 'config_file',
     m: 'method',
   },
-  string: [
-    'local_address',
-    'server',
-    'password',
-    'config_file',
-    'method',
-    'scheme',
-  ],
+  string: ['local_address', 'server', 'password', 'config_file', 'method'],
   default: {
     config_file: './config.json',
   },
@@ -39,7 +30,6 @@ for (let k in configFromArgs) {
   config[k] = v;
 }
 
-const SCHEME = config.scheme;
 let SERVER = config.server;
 const REMOTE_PORT = config.remote_port;
 const LOCAL_ADDRESS = config.local_address;
@@ -54,11 +44,7 @@ if (HTTPPROXY) {
 }
 
 const prepareServer = function (address) {
-  const serverUrl = url.parse(address);
-  serverUrl.slashes = true;
-  if (!serverUrl.protocol) {
-    serverUrl.protocol = SCHEME;
-  }
+  const serverUrl = new URL(address);
   if (!serverUrl.hostname) {
     serverUrl.hostname = address;
     serverUrl.pathname = '/';
@@ -66,7 +52,7 @@ const prepareServer = function (address) {
   if (!serverUrl.port) {
     serverUrl.port = REMOTE_PORT;
   }
-  return url.format(serverUrl);
+  return serverUrl.toString();
 };
 
 if (SERVER instanceof Array) {
@@ -181,11 +167,11 @@ var server = net.createServer(function (connection) {
       if (HTTPPROXY) {
         // WebSocket endpoint for the proxy to connect to
         const endpoint = aServer;
-        const parsed = url.parse(endpoint);
+        const parsed = new URL(endpoint);
         //console.log('attempting to connect to WebSocket %j', endpoint);
 
         // create an instance of the `HttpsProxyAgent` class with the proxy server information
-        const opts = url.parse(HTTPPROXY);
+        const opts = new URL(HTTPPROXY);
 
         // IMPORTANT! Set the `secureEndpoint` option to `false` when connecting
         //            over "ws://", but `true` when connecting over "wss://"

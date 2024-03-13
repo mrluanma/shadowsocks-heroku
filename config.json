@@ -1,7 +1,6 @@
 {
-  "server": "127.0.0.1",
+  "server": "ws://127.0.0.1",
   "local_address": "127.0.0.1",
-  "scheme": "ws",
   "local_port": 1080,
   "remote_port": 8080,
   "password": "`try*(^^$some^$%^complex>:<>?~password/",
