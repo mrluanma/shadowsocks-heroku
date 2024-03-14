@@ -68,11 +68,15 @@ wsserver.on('connection', async (ws) => {
   const readable = conn.pipe(
     createTransform(encryptor.decrypt.bind(encryptor)),
   );
-  await new Promise((resolve, reject) => {
-    readable.once('readable', resolve);
-  });
 
-  const data = await readable.read();
+  let data = await readable.read();
+  while (!data) {
+    await new Promise((resolve, reject) => {
+      readable.once('readable', resolve);
+    });
+
+    data = await readable.read();
+  }
 
   let headerLength = 2;
   if (data.length < headerLength) {
