@@ -1,7 +1,6 @@
 import net from 'net';
 import fs from 'fs';
-import http from 'http';
-import {WebSocketServer, createWebSocketStream} from 'ws';
+import http2 from 'node:http2';
 import parseArgs from 'minimist';
 import {Encryptor} from './encrypt.js';
 import {inetNtoa, createTransform} from './utils.js';
@@ -46,27 +45,16 @@ const PORT = config.remote_port;
 const KEY = config.password;
 let METHOD = config.method;
 
-const server = http.createServer(function (_, res) {
-  res.writeHead(200, {'Content-Type': 'text/plain'});
-  res.end('asdf.');
-});
-
-const wsserver = new WebSocketServer({
-  server,
-  autoPong: true,
-  allowSynchronousEvents: true,
-  perMessageDeflate: false,
-});
-
-wsserver.on('connection', async (ws) => {
-  console.log('concurrent connections:', wsserver.clients.size);
+const server = http2.createServer();
+server.on('error', (err) => console.error(`server: ${err}`));
+server.on('stream', async (conn, _) => {
+  console.log('server connected');
   const encryptor = new Encryptor(KEY, METHOD);
   let remoteAddr;
   let remotePort;
 
-  ws.on('error', (err) => console.error(`server: ${err}`));
+  conn.on('error', (err) => console.error(`server: ${err}`));
 
-  const conn = createWebSocketStream(ws);
   const readable = conn.pipe(
     createTransform(encryptor.decrypt.bind(encryptor)),
   );

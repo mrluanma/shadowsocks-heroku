@@ -1,8 +1,7 @@
 import net from 'net';
 import fs from 'fs';
-import WebSocket, {createWebSocketStream} from 'ws';
+import http2 from 'node:http2';
 import parseArgs from 'minimist';
-import {HttpsProxyAgent} from 'https-proxy-agent';
 import {Encryptor} from './encrypt.js';
 import {inetNtoa, createTransform} from './utils.js';
 import {pipeline} from 'node:stream/promises';
@@ -37,12 +36,6 @@ const LOCAL_ADDRESS = config.local_address;
 const PORT = config.local_port;
 const KEY = config.password;
 let METHOD = config.method;
-const timeout = Math.floor(config.timeout * 1000);
-const HTTPPROXY = process.env.http_proxy;
-
-if (HTTPPROXY) {
-  console.log('http proxy:', HTTPPROXY);
-}
 
 const prepareServer = function (address) {
   const serverUrl = new URL(address);
@@ -76,7 +69,6 @@ var server = net.createServer(async (conn) => {
     console.log('concurrent connections:', count);
   });
   const encryptor = new Encryptor(KEY, METHOD);
-  let ws;
   let remoteAddr = null;
   let remotePort = null;
   let addrToSend = '';
@@ -170,46 +162,25 @@ var server = net.createServer(async (conn) => {
   buf.write('\u0000\u0000\u0000\u0000', 4, 4, 'binary');
   buf.writeUInt16BE(remotePort, 8);
   conn.write(buf);
+
   // connect to remote server
-  // ws = new WebSocket aServer, protocol: "binary"
+  const h2c = http2.connect(aServer);
+  h2c.on('error', (err) => console.error(`local: ${err}`));
 
-  if (HTTPPROXY) {
-    // WebSocket endpoint for the proxy to connect to
-    const endpoint = aServer;
-    const parsed = new URL(endpoint);
-    //console.log('attempting to connect to WebSocket %j', endpoint);
-
-    // create an instance of the `HttpsProxyAgent` class with the proxy server information
-    const opts = new URL(HTTPPROXY);
-
-    // IMPORTANT! Set the `secureEndpoint` option to `false` when connecting
-    //            over "ws://", but `true` when connecting over "wss://"
-    opts.secureEndpoint = parsed.protocol ? parsed.protocol == 'wss:' : false;
-
-    const agent = new HttpsProxyAgent(opts);
-
-    ws = new WebSocket(aServer, {
-      protocol: 'binary',
-      agent,
-    });
-  } else {
-    ws = new WebSocket(aServer, {
-      protocol: 'binary',
-    });
-  }
-
-  ws.on('error', (err) => console.error(`local: ${err}`));
-
-  const wss = createWebSocketStream(ws);
+  const out = h2c.request(
+    {':path': '/', ':method': 'post'},
+    {endStream: false},
+  );
+  out.on('error', (err) => console.error(`local: ${err}`));
   console.log(`connecting ${remoteAddr} via ${aServer}`);
 
   const writable = createTransform(encryptor.encrypt.bind(encryptor));
-  writable.pipe(wss);
+  writable.pipe(out);
   writable.write(data.subarray(3));
   pipeline(conn, writable).catch(
     (e) => e.name !== 'AbortError' && console.error(`local: ${e}`),
   );
-  pipeline(wss, createTransform(encryptor.decrypt.bind(encryptor)), conn).catch(
+  pipeline(out, createTransform(encryptor.decrypt.bind(encryptor)), conn).catch(
     (e) => e.name !== 'AbortError' && console.error(`local: ${e}`),
   );
 });

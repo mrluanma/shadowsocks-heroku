@@ -3,10 +3,7 @@
   "version": "0.9.10",
   "type": "module",
   "dependencies": {
-    "bufferutil": "^4.0.1",
-    "https-proxy-agent": "^7.0.4",
-    "minimist": "^1.2.0",
-    "ws": "^8.16.0"
+    "minimist": "^1.2.0"
   },
   "scripts": {
     "start": "node server.js -b 0.0.0.0",
