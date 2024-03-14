@@ -1,6 +1,5 @@
 import net from 'net';
 import fs from 'fs';
-import http2 from 'node:http2';
 import parseArgs from 'minimist';
 import {Encryptor} from './encrypt.js';
 import {inetNtoa, createTransform} from './utils.js';
@@ -45,9 +44,9 @@ const PORT = config.remote_port;
 const KEY = config.password;
 let METHOD = config.method;
 
-const server = http2.createServer();
+const server = net.createServer();
 server.on('error', (err) => console.error(`server: ${err}`));
-server.on('stream', async (conn, _) => {
+server.on('connection', async (conn) => {
   console.log('server connected');
   const encryptor = new Encryptor(KEY, METHOD);
   let remoteAddr;

@@ -1,6 +1,5 @@
 import net from 'net';
 import fs from 'fs';
-import http2 from 'node:http2';
 import parseArgs from 'minimist';
 import {Encryptor} from './encrypt.js';
 import {inetNtoa, createTransform} from './utils.js';
@@ -72,7 +71,7 @@ var server = net.createServer(async (conn) => {
   let remoteAddr = null;
   let remotePort = null;
   let addrToSend = '';
-  const aServer = getServer();
+  const aServer = new URL(getServer());
 
   conn.on('error', (err) => console.error(`local: ${err}`));
 
@@ -164,13 +163,7 @@ var server = net.createServer(async (conn) => {
   conn.write(buf);
 
   // connect to remote server
-  const h2c = http2.connect(aServer);
-  h2c.on('error', (err) => console.error(`local: ${err}`));
-
-  const out = h2c.request(
-    {':path': '/', ':method': 'post'},
-    {endStream: false},
-  );
+  const out = net.connect(+aServer.port, aServer.hostname);
   out.on('error', (err) => console.error(`local: ${err}`));
   console.log(`connecting ${remoteAddr} via ${aServer}`);
 

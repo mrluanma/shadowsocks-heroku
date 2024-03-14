@@ -1,5 +1,5 @@
 {
-  "server": "http://127.0.0.1",
+  "server": "tcp://127.0.0.1",
   "local_address": "127.0.0.1",
   "local_port": 1080,
   "remote_port": 8080,
