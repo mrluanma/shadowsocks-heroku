@@ -1,3 +1,5 @@
+import {Transform} from 'node:stream';
+
 export function inetNtoa(family, buf) {
   if (family === 4) return buf[0] + '.' + buf[1] + '.' + buf[2] + '.' + buf[3];
   else if (family === 6) {
@@ -23,15 +25,10 @@ export function memoize(func) {
   };
 }
 
-export function createTransformStream(withFn, initial) {
-  return new TransformStream({
-    start(controller) {
-      if (initial) {
-        controller.enqueue(withFn(initial));
-      }
-    },
-    async transform(chunk, controller) {
-      controller.enqueue(withFn(chunk));
+export function createTransform(withFn) {
+  return new Transform({
+    transform(chunk, encoding, callback) {
+      callback(null, withFn(chunk));
     },
   });
 }

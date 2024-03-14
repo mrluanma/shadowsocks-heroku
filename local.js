@@ -4,8 +4,8 @@ import WebSocket, {createWebSocketStream} from 'ws';
 import parseArgs from 'minimist';
 import {HttpsProxyAgent} from 'https-proxy-agent';
 import {Encryptor} from './encrypt.js';
-import {inetNtoa, createTransformStream} from './utils.js';
-import {Duplex} from 'node:stream';
+import {inetNtoa, createTransform} from './utils.js';
+import {pipeline} from 'node:stream/promises';
 
 const options = {
   alias: {
@@ -70,7 +70,7 @@ const getServer = function () {
   }
 };
 
-var server = net.createServer(async (connection) => {
+var server = net.createServer(async (conn) => {
   console.log('local connected');
   server.getConnections(function (err, count) {
     console.log('concurrent connections:', count);
@@ -81,18 +81,23 @@ var server = net.createServer(async (connection) => {
   let remotePort = null;
   let addrToSend = '';
   const aServer = getServer();
-  const conn = Duplex.toWeb(connection);
-  const reader = conn.readable.getReader();
+
+  await new Promise((resolve, reject) => {
+    conn.once('readable', resolve);
+  });
+
   // handshake
-  let {value: data} = await reader.read();
-  const writer = conn.writable.getWriter();
-  await writer.write(Buffer.from([5, 0]));
+  let data = await conn.read();
+  conn.write(Buffer.from([5, 0]));
 
   const nextCmd = data.indexOf(5, 1);
   if (nextCmd !== -1) {
     data = data.subarray(nextCmd);
   } else {
-    data = (await reader.read()).value;
+    await new Promise((resolve, reject) => {
+      conn.once('readable', resolve);
+    });
+    data = await conn.read();
   }
   // +----+-----+-------+------+----------+----------+
   // |VER | CMD |  RSV  | ATYP | DST.ADDR | DST.PORT |
@@ -102,7 +107,7 @@ var server = net.createServer(async (connection) => {
 
   let headerLength = 5;
   if (data.length < headerLength) {
-    reader.cancel();
+    conn.end();
     return;
   }
   const cmd = data[1];
@@ -111,12 +116,12 @@ var server = net.createServer(async (connection) => {
     console.log('unsupported cmd:', cmd);
     const reply = Buffer.from('\u0005\u0007\u0000\u0001', 'binary');
     writer.write(reply);
-    reader.cancel();
+    conn.end();
     return;
   }
   if (![1, 3, 4].includes(addrtype)) {
     console.log('unsupported addrtype:', addrtype);
-    reader.cancel();
+    conn.end();
     return;
   }
   addrToSend = data.subarray(3, 4).toString('binary');
@@ -126,7 +131,7 @@ var server = net.createServer(async (connection) => {
     // ipv4
     headerLength = 4 + 4 + 2;
     if (data.length < headerLength) {
-      reader.cancel();
+      conn.end();
       return;
     }
     remoteAddr = inetNtoa(4, data.subarray(4, 8));
@@ -136,7 +141,7 @@ var server = net.createServer(async (connection) => {
     // ipv6
     headerLength = 4 + 16 + 2;
     if (data.length < headerLength) {
-      reader.cancel();
+      conn.end();
       return;
     }
     remoteAddr = inetNtoa(6, Buffer.from(data.subarray(4, 20)));
@@ -146,7 +151,7 @@ var server = net.createServer(async (connection) => {
     const addrLen = data[4];
     headerLength = 5 + addrLen + 2;
     if (data.length < headerLength) {
-      reader.cancel();
+      conn.end();
       return;
     }
     remoteAddr = new TextDecoder().decode(data.subarray(5, 5 + addrLen));
@@ -157,7 +162,7 @@ var server = net.createServer(async (connection) => {
   buf.write('\u0005\u0000\u0000\u0001', 0, 4, 'binary');
   buf.write('\u0000\u0000\u0000\u0000', 4, 4, 'binary');
   buf.writeUInt16BE(remotePort, 8);
-  writer.write(buf);
+  conn.write(buf);
   // connect to remote server
   // ws = new WebSocket aServer, protocol: "binary"
 
@@ -186,25 +191,18 @@ var server = net.createServer(async (connection) => {
     });
   }
 
-  reader.releaseLock();
-  writer.releaseLock();
-
-  const wss = Duplex.toWeb(createWebSocketStream(ws));
+  const wss = createWebSocketStream(ws);
   console.log(`connecting ${remoteAddr} via ${aServer}`);
 
-  conn.readable
-    .pipeThrough(
-      createTransformStream(
-        encryptor.encrypt.bind(encryptor),
-        data.subarray(3),
-      ),
-    )
-    .pipeTo(wss.writable)
-    .catch((e) => e.name !== 'AbortError' && console.error(`local: ${e}`));
-  wss.readable
-    .pipeThrough(createTransformStream(encryptor.decrypt.bind(encryptor)))
-    .pipeTo(conn.writable)
-    .catch((e) => e.name !== 'AbortError' && console.error(`local: ${e}`));
+  const writable = createTransform(encryptor.encrypt.bind(encryptor));
+  writable.pipe(wss);
+  writable.write(data.subarray(3));
+  pipeline(conn, writable).catch(
+    (e) => e.name !== 'AbortError' && console.error(`local: ${e}`),
+  );
+  pipeline(wss, createTransform(encryptor.decrypt.bind(encryptor)), conn).catch(
+    (e) => e.name !== 'AbortError' && console.error(`local: ${e}`),
+  );
 });
 
 server.listen(PORT, LOCAL_ADDRESS, function () {
