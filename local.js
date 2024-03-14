@@ -82,22 +82,29 @@ var server = net.createServer(async (conn) => {
   let addrToSend = '';
   const aServer = getServer();
 
-  await new Promise((resolve, reject) => {
-    conn.once('readable', resolve);
-  });
+  conn.on('error', (err) => console.error(`local: ${err}`));
 
-  // handshake
   let data = await conn.read();
+  while (!data) {
+    await new Promise((resolve, reject) => {
+      conn.once('readable', resolve);
+    });
+    data = await conn.read();
+  }
+  // handshake
   conn.write(Buffer.from([5, 0]));
 
   const nextCmd = data.indexOf(5, 1);
   if (nextCmd !== -1) {
     data = data.subarray(nextCmd);
   } else {
-    await new Promise((resolve, reject) => {
-      conn.once('readable', resolve);
-    });
     data = await conn.read();
+    while (!data) {
+      await new Promise((resolve, reject) => {
+        conn.once('readable', resolve);
+      });
+      data = await conn.read();
+    }
   }
   // +----+-----+-------+------+----------+----------+
   // |VER | CMD |  RSV  | ATYP | DST.ADDR | DST.PORT |
@@ -190,6 +197,8 @@ var server = net.createServer(async (conn) => {
       protocol: 'binary',
     });
   }
+
+  ws.on('error', (err) => console.error(`local: ${err}`));
 
   const wss = createWebSocketStream(ws);
   console.log(`connecting ${remoteAddr} via ${aServer}`);

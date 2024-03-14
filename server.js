@@ -64,6 +64,8 @@ wsserver.on('connection', async (ws) => {
   let remoteAddr;
   let remotePort;
 
+  ws.on('error', (err) => console.error(`server: ${err}`));
+
   const conn = createWebSocketStream(ws);
   const readable = conn.pipe(
     createTransform(encryptor.decrypt.bind(encryptor)),
@@ -120,6 +122,9 @@ wsserver.on('connection', async (ws) => {
   }
 
   const remote = net.connect(remotePort, remoteAddr);
+
+  remote.on('error', (err) => console.error(`server: ${err}`));
+
   console.log('connecting', remoteAddr);
   if (data.length > headerLength) {
     remote.write(data.subarray(headerLength));
