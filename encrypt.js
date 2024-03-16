@@ -81,6 +81,7 @@ export class Encryptor {
   decrypt(buf) {
     if (!this.decipher) {
       const decipher_iv_len = this.get_cipher_len(this.method)[1];
+      if (buf.length < decipher_iv_len) throw new Error('insufficient iv');
       const decipher_iv = buf.subarray(0, decipher_iv_len);
       this.decipher = this.get_cipher(this.key, this.method, 0, decipher_iv);
       return this.decipher.update(buf.subarray(decipher_iv_len));

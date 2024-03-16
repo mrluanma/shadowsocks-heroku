@@ -70,6 +70,7 @@ wsserver.on('connection', async (ws) => {
   const readable = conn.pipe(
     createTransform(encryptor.decrypt.bind(encryptor)),
   );
+  readable.on('error', (e) => console.error(`server: ${e}`));
 
   let data = await readable.read();
   while (!data) {

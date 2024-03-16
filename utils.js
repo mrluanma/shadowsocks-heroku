@@ -28,7 +28,11 @@ export function memoize(func) {
 export function createTransform(withFn) {
   return new Transform({
     transform(chunk, encoding, callback) {
-      callback(null, withFn(chunk));
+      try {
+        callback(null, withFn(chunk));
+      } catch (err) {
+        callback(err);
+      }
     },
   });
 }
