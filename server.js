@@ -134,11 +134,9 @@ wsserver.on('connection', async (ws) => {
   pipeline(readable, remote).catch(
     (e) => e.name !== 'AbortError' && console.error(`server: ${e}`),
   );
-  pipeline(
-    remote,
-    createTransform(encryptor.encrypt.bind(encryptor)),
-    conn,
-  ).catch((e) => e.name !== 'AbortError' && console.error(`server: ${e}`));
+  pipeline(remote, conn).catch(
+    (e) => e.name !== 'AbortError' && console.error(`server: ${e}`),
+  );
 });
 
 server.listen(PORT, LOCAL_ADDRESS, function () {

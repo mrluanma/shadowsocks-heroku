@@ -209,7 +209,7 @@ var server = net.createServer(async (conn) => {
   pipeline(conn, writable).catch(
     (e) => e.name !== 'AbortError' && console.error(`local: ${e}`),
   );
-  pipeline(wss, createTransform(encryptor.decrypt.bind(encryptor)), conn).catch(
+  pipeline(wss, conn).catch(
     (e) => e.name !== 'AbortError' && console.error(`local: ${e}`),
   );
 });
