@@ -1,5 +1,3 @@
-import {Transform} from 'node:stream';
-
 export function inetNtoa(family, buf) {
   if (family === 4) return buf[0] + '.' + buf[1] + '.' + buf[2] + '.' + buf[3];
   else if (family === 6) {
@@ -9,30 +7,4 @@ export function inetNtoa(family, buf) {
     }
     return addr.join(':');
   }
-}
-
-export function memoize(func) {
-  const cache = {};
-
-  return function (...args) {
-    const key = args.join('');
-    if (cache[key]) return cache[key];
-
-    const result = func.apply(this, args);
-    cache[key] = result;
-
-    return result;
-  };
-}
-
-export function createTransform(withFn) {
-  return new Transform({
-    transform(chunk, encoding, callback) {
-      try {
-        callback(null, withFn(chunk));
-      } catch (err) {
-        callback(err);
-      }
-    },
-  });
 }

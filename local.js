@@ -3,8 +3,7 @@ import fs from 'fs';
 import WebSocket, {createWebSocketStream} from 'ws';
 import parseArgs from 'minimist';
 import {HttpsProxyAgent} from 'https-proxy-agent';
-import {Encryptor} from './encrypt.js';
-import {inetNtoa, createTransform} from './utils.js';
+import {inetNtoa} from './utils.js';
 import {pipeline} from 'node:stream/promises';
 
 const options = {
@@ -75,7 +74,6 @@ var server = net.createServer(async (conn) => {
   server.getConnections(function (err, count) {
     console.log('concurrent connections:', count);
   });
-  const encryptor = new Encryptor(KEY, METHOD);
   let ws;
   let remoteAddr = null;
   let remotePort = null;
@@ -203,10 +201,8 @@ var server = net.createServer(async (conn) => {
   const wss = createWebSocketStream(ws);
   console.log(`connecting ${remoteAddr} via ${aServer}`);
 
-  const writable = createTransform(encryptor.encrypt.bind(encryptor));
-  writable.pipe(wss);
-  writable.write(data.subarray(3));
-  pipeline(conn, writable).catch(
+  wss.write(data.subarray(3));
+  pipeline(conn, wss).catch(
     (e) => e.name !== 'AbortError' && console.error(`local: ${e}`),
   );
   pipeline(wss, conn).catch(

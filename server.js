@@ -3,8 +3,7 @@ import fs from 'fs';
 import http from 'http';
 import {WebSocketServer, createWebSocketStream} from 'ws';
 import parseArgs from 'minimist';
-import {Encryptor} from './encrypt.js';
-import {inetNtoa, createTransform} from './utils.js';
+import {inetNtoa} from './utils.js';
 import {pipeline} from 'node:stream/promises';
 
 const options = {
@@ -60,25 +59,21 @@ const wsserver = new WebSocketServer({
 
 wsserver.on('connection', async (ws) => {
   console.log('concurrent connections:', wsserver.clients.size);
-  const encryptor = new Encryptor(KEY, METHOD);
   let remoteAddr;
   let remotePort;
 
   ws.on('error', (err) => console.error(`server: ${err}`));
 
   const conn = createWebSocketStream(ws);
-  const readable = conn.pipe(
-    createTransform(encryptor.decrypt.bind(encryptor)),
-  );
-  readable.on('error', (e) => console.error(`server: ${e}`));
+  conn.on('error', (e) => console.error(`server: ${e}`));
 
-  let data = await readable.read();
+  let data = await conn.read();
   while (!data) {
     await new Promise((resolve, reject) => {
-      readable.once('readable', resolve);
+      conn.once('readable', resolve);
     });
 
-    data = await readable.read();
+    data = await conn.read();
   }
 
   let headerLength = 2;
@@ -131,7 +126,7 @@ wsserver.on('connection', async (ws) => {
     remote.write(data.subarray(headerLength));
   }
 
-  pipeline(readable, remote).catch(
+  pipeline(conn, remote).catch(
     (e) => e.name !== 'AbortError' && console.error(`server: ${e}`),
   );
   pipeline(remote, conn).catch(
