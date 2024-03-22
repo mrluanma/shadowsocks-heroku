@@ -13,4 +13,7 @@
   pre-commit.hooks = {
     prettier.enable = true;
   };
+  enterTest = ''
+    node test.js
+  '';
 }
